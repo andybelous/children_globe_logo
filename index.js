@@ -43,223 +43,6 @@ nodes.forEach(node => new Item(node));
 
 
 
-// const three_globe_logo_container = document.getElementById("three-logo-container");
-
-
-// var container_width, container_height;
-
-
-// let scene = new THREE.Scene();
-// let camera = new THREE.PerspectiveCamera(45, three_globe_logo_container.offsetWidth / three_globe_logo_container.offsetHeight, 1, 2000);
-// camera.position.set(0.5, 0.5, 1).setLength(14);
-// let renderer = new THREE.WebGLRenderer({
-//   antialias: true
-// });
-// renderer.setSize(three_globe_logo_container.offsetWidth, three_globe_logo_container.offsetHeight);
-// renderer.setClearColor(0xFFFFFF);
-
-
-// three_globe_logo_container.appendChild(renderer.domElement);
-
-
-// window.addEventListener("resize", onWindowResize);
-
-// let controls = new THREE.OrbitControls(camera, renderer.domElement);
-// controls.enablePan = false;
-// controls.minDistance = 6;
-// controls.maxDistance = 15;
-// controls.enableDamping = true;
-// controls.autoRotate = true;
-// controls.autoRotateSpeed *= 0.25;
-
-// let globalUniforms = {
-//   time: { value: 0 }
-// };
-
-// // <GLOBE>
-// // https://web.archive.org/web/20120107030109/http://cgafaq.info/wiki/Evenly_distributed_points_on_sphere#Spirals
-// let counter = 1900000;
-// let rad = 5;
-// let sph = new THREE.Spherical();
-
-// let r = 0;
-// let dlong = Math.PI * (3 - Math.sqrt(5));
-// let dz = 2 / counter;
-// let long = 0;
-// let z = 1 - dz / 2;
-
-// let pts = [];
-// let clr = [];
-// let c = new THREE.Color();
-// let uvs = [];
-
-// for (let i = 0; i < counter; i++) {
-//   r = Math.sqrt(1 - z * z);
-//   let p = new THREE.Vector3(
-//     Math.cos(long) * r,
-//     z,
-//     -Math.sin(long) * r
-//   ).multiplyScalar(rad);
-//   pts.push(p);
-//   z = z - dz;
-//   long = long + dlong;
-
-//   //c.setHSL(0.45, 0.5, Math.random() * 0.25 + 0.25);
-//   c.setStyle("#7DF9FF")
-//   c.toArray(clr, i * 3);
-
-//   sph.setFromVector3(p);
-//   uvs.push((sph.theta + Math.PI) / (Math.PI * 2), 1.0 - sph.phi / Math.PI);
-// }
-
-// let g = new THREE.BufferGeometry().setFromPoints(pts);
-// g.setAttribute("color", new THREE.Float32BufferAttribute(clr, 3));
-// g.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-// let m = new THREE.PointsMaterial({
-//   size: 0.1,
-//   vertexColors: true,
-//   onBeforeCompile: (shader) => {
-//     shader.uniforms.globeTexture = {
-//       value: new THREE.TextureLoader().load(imgData)
-//     };
-//     shader.vertexShader = `
-//     	uniform sampler2D globeTexture;
-//       varying float vVisibility;
-//       varying vec3 vNormal;
-//       varying vec3 vMvPosition;
-//       ${shader.vertexShader}
-//     `.replace(
-//       `gl_PointSize = size;`,
-//       `
-//       	vVisibility = texture(globeTexture, uv).g; // get value from texture
-//         gl_PointSize = size * (vVisibility < 0.5 ? 1. : 0.75); // size depends on the value
-//         vNormal = normalMatrix * normalize(position);
-//         vMvPosition = -mvPosition.xyz;
-//         gl_PointSize *= 0.4 + (dot(normalize(vMvPosition), vNormal) * 0.6); // size depends position in camera space
-//       `
-//     );
-//     //console.log(shader.vertexShader);
-//     shader.fragmentShader = `
-//     	varying float vVisibility;
-//       varying vec3 vNormal;
-//       varying vec3 vMvPosition;
-//       ${shader.fragmentShader}
-//     `.replace(
-//       `vec4 diffuseColor = vec4( diffuse, opacity );`,
-//       `
-//       	bool circ = length(gl_PointCoord - 0.5) > 0.5; // make points round
-//         bool vis = dot(vMvPosition, vNormal) < 0.; // visible only on the front side of the sphere
-//       	if (circ || vis) discard;
-        
-//         vec3 col = diffuse + (vVisibility > 0.5 ? 0.5 : 0.); // make oceans brighter
-        
-//         vec4 diffuseColor = vec4( col, opacity );
-//       `
-//     );
-//     //console.log(shader.fragmentShader);
-//   }
-// });
-// let globe = new THREE.Points(g, m);
-// scene.add(globe);
-
-//   // <ICOSAHEDRON>
-//   let icshdrn = new THREE.Mesh(new THREE.IcosahedronGeometry(rad, 1), new THREE.MeshBasicMaterial({color: 0x647f7f, wireframe: false}));
-//   globe.add(icshdrn);
-//   // </ICOSAHEDRON>
-// // </GLOBE>
-
-// // <Markers>
-// const markerCount = 0;
-// let markerInfo = []; // information on markers
-// let gMarker = new THREE.PlaneGeometry();
-// let mMarker = new THREE.MeshBasicMaterial({
-//   color: 0xff3232,
-//   onBeforeCompile: (shader) => {
-//     shader.uniforms.time = globalUniforms.time;
-//     shader.vertexShader = `
-//     	attribute float phase;
-//       varying float vPhase;
-//       ${shader.vertexShader}
-//     `.replace(
-//       `#include <begin_vertex>`,
-//       `#include <begin_vertex>
-//       	vPhase = phase; // de-synch of ripples
-//       `
-//     );
-//     //console.log(shader.vertexShader);
-//     shader.fragmentShader = `
-//     	uniform float time;
-//       varying float vPhase;
-//     	${shader.fragmentShader}
-//     `.replace(
-//       `vec4 diffuseColor = vec4( diffuse, opacity );`,
-//       `
-//       vec2 lUv = (vUv - 0.5) * 2.;
-//       float val = 0.;
-//       float lenUv = length(lUv);
-//       val = max(val, 1. - step(0.25, lenUv)); // central circle
-//       val = max(val, step(0.4, lenUv) - step(0.5, lenUv)); // outer circle
-      
-//       float tShift = fract(time * 0.5 + vPhase);
-//       val = max(val, step(0.4 + (tShift * 0.6), lenUv) - step(0.5 + (tShift * 0.5), lenUv)); // ripple
-      
-//       if (val < 0.5) discard;
-      
-//       vec4 diffuseColor = vec4( diffuse, opacity );`
-//     );
-//     //console.log(shader.fragmentShader)
-//   }
-// });
-// mMarker.defines = { USE_UV: " " }; // needed to be set to be able to work with UVs
-// let markers = new THREE.InstancedMesh(gMarker, mMarker, markerCount);
-
-// let dummy = new THREE.Object3D();
-// let phase = [];
-// for (let i = 0; i < markerCount; i++) {
-//   dummy.position.randomDirection().setLength(rad + 0.1);
-//   dummy.lookAt(dummy.position.clone().setLength(rad + 1));
-//   dummy.updateMatrix();
-//   markers.setMatrixAt(i, dummy.matrix);
-//   phase.push(Math.random());
-
-//   markerInfo.push({
-//     id: i + 1,
-//     mag: THREE.MathUtils.randInt(1, 10),
-//     crd: dummy.position.clone()
-//   });
-// }
-// gMarker.setAttribute(
-//   "phase",
-//   new THREE.InstancedBufferAttribute(new Float32Array(phase), 1)
-// );
-
-// scene.add(markers);
-// // </Markers>
-
-// // <Label>
-
-// // </Label>
-
-
-
-// let clock = new THREE.Clock();
-
-// renderer.setAnimationLoop(() => {
-//   let t = clock.getElapsedTime();
-//   globalUniforms.time.value = t;
-//   controls.update();
-//   renderer.render(scene, camera);
-// });
-
-// function onWindowResize() {
-//   camera.aspect = three_globe_logo_container.offsetWidth / three_globe_logo_container.offsetHeight;
-//   camera.updateProjectionMatrix();
-
-//   renderer.setSize(three_globe_logo_container.offsetWidth, three_globe_logo_container.offsetHeight);
-// }
-
-
-
 
 
 
@@ -273,6 +56,12 @@ const countryNameEl = document.querySelector(".info span");
 
 let renderer, scene, camera, rayCaster, pointer, controls;
 let globeGroup, globeColorMesh, globeStrokesMesh, globeSelectionOuterMesh;
+
+var letter_model;
+
+
+const globe_original_position = new THREE.Vector3(-2.6, 0, 0);
+const globe_original_rotation = new THREE.Vector3(0, 1.5399999999999892, 0);
 
 var GLOBE_ANIMATED = true;
 var FOCUS_ON_SWITH_PLAYED = false;
@@ -338,9 +127,9 @@ function animateGlobeUpDown(direction)
     {
         gsap.to(globeGroup.position, {
             duration: 2,
-            x: 0,
-            y: 0,
-            z: 0,
+            x: globe_original_position.x,
+            y: globe_original_position.y,
+            z: globe_original_position.z,
             onUpdate: () =>
             {
               //controls.update();
@@ -353,15 +142,17 @@ function animateGlobeUpDown(direction)
             ease: "power1.inOut"
           });
 
+
+
           return;
     }
 
-    const offset = direction == "up" ? 0.5: -0.5;
+    const offset = direction == "up" ? 0.2: -0.2;
     gsap.to(globeGroup.position, {
         duration: 2,
-        x: 0,
+        x: globe_original_position.x,
         y: offset,
-        z: 0,
+        z: globe_original_position.z,
         onUpdate: () =>
         {
           //controls.update();
@@ -383,19 +174,141 @@ function animateGlobeUpDown(direction)
       });
 
 }
+
+
+
+function loadLogoLetters ()
+{
+
+    // controls = new THREE.OrbitControls(camera, canvasEl);
+    // scene.add(controls);
+
+//     const geometry = new THREE.BoxGeometry( 1, 1, 1 ); 
+// const material = new THREE.MeshBasicMaterial( {color: 0x00ff00, wireframe: true} ); 
+// const cube = new THREE.Mesh( geometry, material ); 
+// scene.add( cube );
+
+    
+
+
+
+
+
+
+    const draco_loader = new THREE.DRACOLoader();
+
+    // Specify path to a folder containing WASM/JS decoding libraries.
+    draco_loader.setDecoderPath( 'draco/gltf/' );
+    //draco_loader.preload();
+
+    //draco_loader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+
+    var loader = new THREE.GLTFLoader();
+    loader.setDRACOLoader(draco_loader);
+        // Load a glTF resource
+        loader.load(
+            // resource URL
+            "combined_letters.glb",
+            // called when the resource is loaded
+            function ( gltf ) {
+                console.log("gltf", gltf)
+                letter_model = gltf.scene;
+                scene.add( letter_model );
+                // letter_model.renderOrder = 0;
+
+                // letter_model.children.forEach((child)=>
+                // {
+                //     child.renderOrder = 0;
+                // })
+
+                
+                console.log("letter_model", letter_model )
+
+                const W = gltf.scene.getObjectByName("W");
+                W.position.x -=1.1;
+            },
+            // called while loading is progressing
+            function ( xhr ) {
+
+                console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
+
+            },
+            // called when loading has errors
+            function ( error ) {
+
+                console.log( 'An error happened', error );
+
+            }
+        );
+    
+
+
+
+}
+
+
+
 function initScene() {
-    renderer = new THREE.WebGLRenderer({canvas: canvasEl, alpha: true});
+    renderer = new THREE.WebGLRenderer({canvas: canvasEl, alpha: true, antialias: true});
     renderer.setSize(containerEl.offsetWidth, containerEl.offsetHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(params.fogColor, 0, params.fogDistance);
+    //scene.fog = new THREE.Fog(params.fogColor, 0, params.fogDistance);
 
     //camera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0, 3);
-    camera = new THREE.PerspectiveCamera(90, containerEl.offsetWidth / containerEl.offsetHeight, 0.1, 2000);
-    camera.position.z = 2;
-    camera.position.y = 0;
-    camera.lookAt(0,0,0)
+    camera = new THREE.PerspectiveCamera(50, containerEl.offsetWidth / containerEl.offsetHeight, 0.1, 2000);
+    // camera.position.z = 12;
+    // camera.position.y = 2;
+    camera.position.set(0, 0.5, 5.3);
+    //camera.lookAt(0,2,0)
+
+
+    const INTENSITY = 0.7;
+
+    //White directional light at half intensity shining from the top.
+    const directionalLight1 = new THREE.DirectionalLight( 0xffffff, INTENSITY );
+    scene.add( directionalLight1 );
+    directionalLight1.position.set(0, 50, 0);
+
+    // const helper = new THREE.DirectionalLightHelper( directionalLight1, 5 );
+    // scene.add( helper );
+
+    const directionalLight2 = new THREE.DirectionalLight( 0xffffff, INTENSITY );
+    scene.add( directionalLight2 );
+    directionalLight2.position.set(0, 0, 50);
+
+
+    const helper2 = new THREE.DirectionalLightHelper( directionalLight2, 5 );
+    //scene.add( helper2 );
+
+    const directionalLight3 = new THREE.DirectionalLight( 0xffffff, INTENSITY );
+    scene.add( directionalLight3 );
+    directionalLight3.position.set(0, 0, -50);
+
+
+    const amblight = new THREE.AmbientLight( 0x404040 ); // soft white light
+    scene.add( amblight );
+
+
+//     const light = new THREE.HemisphereLight( 0xffffbb, 0x080820, 1 );
+// scene.add( light );
+
+
+    // const spotLight = new THREE.SpotLight( 0xffffff );
+    // spotLight.position.set( 0, 100, 0 );
+
+    // spotLight.castShadow = true;
+
+    // spotLight.shadow.mapSize.width = 1024;
+    // spotLight.shadow.mapSize.height = 1024;
+
+    // spotLight.shadow.camera.near = 500;
+    // spotLight.shadow.camera.far = 4000;
+    // spotLight.shadow.camera.fov = 30;
+
+    // scene.add( spotLight );
+    
 
     globeGroup = new THREE.Group();
     scene.add(globeGroup);
@@ -421,6 +334,8 @@ function initScene() {
 
     animateGlobeUpDown("up");
 
+    loadLogoLetters();
+
 
     // const geometry = new THREE.BoxGeometry( 1, 1, 1 ); 
     // const material = new THREE.MeshBasicMaterial( {color: 0x00ff00} ); 
@@ -444,66 +359,51 @@ window.addEventListener("click", (e)=>
 })
 
 
-function createOrbitControls() {
-    controls = new THREE.OrbitControls(camera, canvasEl);
-    controls.enablePan = false;
-    // controls.enableZoom = false;
-    //controls.enableDamping = true;
-    // controls.minPolarAngle = .46 * Math.PI;
-    // controls.maxPolarAngle = .46 * Math.PI;
-    //controls.autoRotate = true;
-    //controls.autoRotateSpeed *= 1.2;
-
-    controls.addEventListener("start", () => {
-        isHoverable = false;
-        pointer = new THREE.Vector2(-1, -1);
-        // gsap.to(globeGroup.scale, {
-        //     duration: .3,
-        //     x: .9,
-        //     y: .9,
-        //     z: .9,
-        //     ease: "power1.inOut"
-        // })
-    });
-    controls.addEventListener("end", () => {
-        isHoverable = true;
-        // gsap.to(globeGroup.scale, {
-        //     duration: .6,
-        //     x: 1,
-        //     y: 1,
-        //     z: 1,
-        //     ease: "back(1.7).out",
-        //     onComplete: () => {
-        //         isHoverable = true;
-        //     }
-        // })
-    });
-}
 
 function createGlobe() {
+
+
+    // const geometry = new THREE.SphereGeometry( 1, 32, 16 ); 
+    // const material = new THREE.MeshBasicMaterial( { color: 0xffff00 } ); 
+    // const sphere = new THREE.Mesh( geometry, material ); scene.add( sphere );
+    // sphere.position.set(globe_original_position.x, globe_original_position.y, globe_original_position.z)
+    // sphere.scale.set(0.7, 0.7, 0.7)
+
+
     const globeGeometry = new THREE.IcosahedronGeometry(1, 20);
 
     const globeColorMaterial = new THREE.MeshBasicMaterial({
         transparent: true,
         alphaTest: true,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        
+        
     });
     const globeStrokeMaterial = new THREE.MeshBasicMaterial({
         transparent: true,
-        depthTest: false,
+        //depthTest: false,
+        
+        
     });
     const outerSelectionColorMaterial = new THREE.MeshBasicMaterial({
         transparent: true,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        
+        
     });
 
     globeColorMesh = new THREE.Mesh(globeGeometry, globeColorMaterial);
     globeStrokesMesh = new THREE.Mesh(globeGeometry, globeStrokeMaterial);
     globeSelectionOuterMesh = new THREE.Mesh(globeGeometry, outerSelectionColorMaterial);
 
-    globeStrokesMesh.renderOrder = 2;
+    //globeStrokesMesh.renderOrder = 2;
 
     globeGroup.add(globeStrokesMesh, globeSelectionOuterMesh, globeColorMesh);
+
+    globeGroup.scale.set(0.7, 0.7, 0.7 );
+    globeGroup.position.set(globe_original_position.x, globe_original_position.y, globe_original_position.z);
+
+    console.log("globeGroup", globeGroup)
 
     
     // globeGroup.rotateX(3.8*Math.PI/18);
@@ -588,7 +488,7 @@ function focusOnSwitherLand ()
     gsap.to(globeGroup.rotation, {
         duration: 2,
         x: 0.6632251157578458,
-        y: 1.518436449235066,
+        y: 1.838436449235066,
         z: 0,
         onUpdate: () =>
         {
@@ -600,10 +500,33 @@ function focusOnSwitherLand ()
           //this.controls.enabled = true;
 
           this.setTimeout(()=>{
-            GLOBE_ANIMATED = true;
-            animateGlobeUpDown("up")
 
-            FOCUS_ON_SWITH_PLAYED = false;
+
+        
+            //reset Rotation
+            gsap.to(globeGroup.rotation, {
+                duration: 2,
+                x: globe_original_rotation.x,
+                y: globe_original_rotation.y,
+                z: globe_original_rotation.z,
+                onUpdate: () =>
+                {
+                //controls.update();
+                },
+                onComplete: () =>
+                {
+                //this.controls.enabled = true;
+
+                GLOBE_ANIMATED = true;
+                animateGlobeUpDown("up")
+                FOCUS_ON_SWITH_PLAYED = false;
+                }, 
+                ease: "power1.inOut"
+            });
+
+
+
+            
           }, 3000
           )
           
@@ -674,7 +597,7 @@ function render() {
     //console.log("globeGroup.rotation",globeGroup.rotation)
     if(GLOBE_ANIMATED)
     {
-        console.log("globeGroup.rotation.y", globeGroup.rotation.y)
+        //console.log("globeGroup.rotation.y", globeGroup.rotation.y)
         //console.log("Math.PI", Math.PI)
         if(globeGroup.rotation.y >= Math.PI)
         {
@@ -696,6 +619,9 @@ function render() {
     // }
 
     renderer.render(scene, camera);
+
+
+    console.log("camera", camera)
 }
 
 function updateSize() {
