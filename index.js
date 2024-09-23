@@ -94,6 +94,67 @@ const bBoxes = [];
 const dataUris = [];
 
 
+var LETTERS_LOADED = false;
+
+
+
+//Physix
+// Global Solver Settings
+const solverIterations = 100;
+const solverTolerance = 0.001;
+
+// Physics world setup
+var world = new CANNON.World();
+world.gravity.set(0, -1, 0);
+world.solver.iterations = solverIterations;
+world.solver.tolerance = solverTolerance;
+
+// If using split solver (can help with performance in some cases)
+const split = true;
+if (split) {
+    world.solver = new CANNON.SplitSolver(new CANNON.GSSolver());
+}
+
+
+// Physical Material Definition
+const physMatOne = new THREE.MeshPhysicalMaterial({
+    color: 0x78F078,
+    opacity: 1,
+    reflecitivy: .4,
+    roughness: .6,
+});
+
+//Only this material is changed onclick
+const physMatTwo = new THREE.MeshPhysicalMaterial({
+    color: 0xFFFFFF,
+    opacity: 1,
+    reflecitivy: .4,
+    roughness: .6,
+});
+
+
+// Physics material
+const letterMaterial = new CANNON.Material('letterMaterial');
+const letterContactMaterial = new CANNON.ContactMaterial(letterMaterial, letterMaterial, { friction: 0.1, restitution: 0.8 });
+world.addContactMaterial(letterContactMaterial);
+
+// Attractor Settings
+const attractorStrength = 8;
+const attractorPosition = new CANNON.Vec3(0, 0, 0);
+
+
+var letterMeshes = [];
+
+
+var cannonDebugger;
+
+
+
+
+
+
+
+
 initScene();
 createControls();
 
@@ -213,7 +274,10 @@ function loadLogoLetters ()
             function ( gltf ) {
                 console.log("gltf", gltf)
                 letter_model = gltf.scene;
+                
                 scene.add( letter_model );
+                //letter_model.position.y += 2;   
+                letter_model.updateMatrixWorld();
                 // letter_model.renderOrder = 0;
 
                 // letter_model.children.forEach((child)=>
@@ -226,6 +290,102 @@ function loadLogoLetters ()
 
                 const W = gltf.scene.getObjectByName("W");
                 W.position.x -=1.1;
+
+
+                letter_model.children.forEach((letter)=>
+                {
+                    //Center geometry to fix intersection bug
+                    
+                    // var center = new THREE.Vector3();
+                    //letter.geometry.applyQuaternion(new THREE.Quaternion(Math.PI/4,0,0,1));
+                    letter.geometry.center();
+                    letter.rotation.x = 0;
+                    
+                    letter.geometry.rotateX(Math.PI/2);
+                    
+                    //letter.updateMatrixWorld();
+                    letter.geometry.computeBoundingBox();
+                    letter.updateMatrixWorld();
+                    // letter.geometry.boundingBox.getCenter(center);
+                    // letter.geometry.center();
+
+
+
+
+
+                    const boundingBox = new THREE.Box3().setFromObject(letter);
+                    const size = new THREE.Vector3();
+                    boundingBox.getSize(size);
+
+                    // const box = new THREE.BoxHelper( letter, 0xffff00 );
+                    // scene.add( box );
+
+                    const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
+
+                    console.log("halfExtents", halfExtents)
+                    const letterShape = new CANNON.Box(halfExtents);
+
+                    console.log("letter", letter)
+                    
+                    // letter.rotation.x = 0;
+                    // letter.rotation.y = 0;
+                    // letter.rotation.z = 0;
+
+                    function getRandomArbitrary(min, max) {
+                        return Math.random() * (max - min) + min;
+                      }
+                    
+
+
+
+                    const letterBody = new CANNON.Body({
+                        mass: 1.5,
+                        linearDamping: 0.4,
+                        angularDamping: 0.4,
+                        position: letter.position.clone(),
+                        shape: letterShape,
+                        material: letterMaterial,
+                        allowSleep: true,
+                        quaternion: letter.quaternion
+                        
+                    });
+
+                    // letterBody.quaternion = letter.quaternion.clone()
+
+
+                    letterBody.maxAngularVelocity = 5;
+                    world.addBody(letterBody);
+                    letter.userData.physicsBody = letterBody;
+                    letterMeshes.push(letter);
+
+                    letter.userData.original_position = new THREE.Vector3(letter.position.x, letter.position.y, letter.position.z);
+                    letter.userData.original_quaternion = letter.quaternion.clone();
+                })  
+
+                LETTERS_LOADED = true;
+
+
+
+                // Materials
+                const stone = new CANNON.Material('stone')
+                const stone_stone = new CANNON.ContactMaterial(stone, stone, {
+                    friction: 0.3,
+                    restitution: 0.1,
+                })
+                world.addContactMaterial(stone_stone)
+
+
+                // Ground plane
+                const groundShape = new CANNON.Plane()
+                const groundBody = new CANNON.Body({ mass: 0, material: stone })
+                groundBody.addShape(groundShape)
+                groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0)
+                groundBody.position.set(0, -1, 0)
+                world.addBody(groundBody)
+
+
+
+
             },
             // called while loading is progressing
             function ( xhr ) {
@@ -247,7 +407,45 @@ function loadLogoLetters ()
 }
 
 
+function resetModelPosition()
+{
 
+
+    world.clearForces();
+    letterMeshes.forEach((letter)=>
+    {
+
+
+        
+        // world.removeBody(letter.userData.physicsBody);
+        // world.addBody(letter.userData.physicsBody);
+
+        letter.userData.physicsBody.force.setZero();
+        letter.userData.physicsBody.torque.setZero();
+
+        letter.userData.physicsBody.velocity.setZero();
+        letter.userData.physicsBody.angularVelocity.setZero();
+
+        letter.userData.physicsBody.position = new CANNON.Vec3(letter.userData.original_position.x, letter.userData.original_position.y, letter.userData.original_position.z) ;
+        letter.userData.physicsBody.quaternion.copy(letter.userData.original_quaternion) ;
+
+        // orientation
+        //body.quaternion.set(0,0,0,1);
+        // body.initQuaternion.set(0,0,0,1);
+        // body.previousQuaternion.set(0,0,0,1);
+        // body.interpolatedQuaternion.set(0,0,0,1);
+
+
+        // Force
+
+
+        
+        // letter.userData.physicsBody.force.setZero();
+        // letter.userData.physicsBody.torque.setZero();
+    
+    })
+    
+}
 function initScene() {
     renderer = new THREE.WebGLRenderer({canvas: canvasEl, alpha: true, antialias: true});
     renderer.setSize(containerEl.offsetWidth, containerEl.offsetHeight);
@@ -255,6 +453,12 @@ function initScene() {
 
     scene = new THREE.Scene();
     //scene.fog = new THREE.Fog(params.fogColor, 0, params.fogDistance);
+
+
+    //debugging
+    // cannonDebugger = new CannonDebugger(scene, world, {
+    //     // options...
+    // })
 
     //camera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0, 3);
     camera = new THREE.PerspectiveCamera(50, containerEl.offsetWidth / containerEl.offsetHeight, 0.1, 2000);
@@ -354,6 +558,30 @@ window.addEventListener("click", (e)=>
         return;
     }
     focusOnSwitherLand();
+
+
+    
+
+    //Give letter impulse
+    letterMeshes.forEach(function (letter) {
+        const body = letter.userData.physicsBody;
+        if (body) {
+
+
+            //Add impulse onclick
+            const strength = 140;
+            const dt = 1 / 60;
+
+            const topPoint = new CANNON.Vec3(-0.18, 0.2, 0.1)
+            const impulse = new CANNON.Vec3(strength * dt, 0, 0)
+            body.applyImpulse(impulse, topPoint)
+
+            
+
+        }
+    });
+
+
 
 
 })
@@ -520,6 +748,9 @@ function focusOnSwitherLand ()
                 GLOBE_ANIMATED = true;
                 animateGlobeUpDown("up")
                 FOCUS_ON_SWITH_PLAYED = false;
+
+                resetModelPosition();
+
                 }, 
                 ease: "power1.inOut"
             });
@@ -620,8 +851,12 @@ function render() {
 
     renderer.render(scene, camera);
 
+    update();
 
-    console.log("camera", camera)
+    //cannonDebugger.update()
+
+
+    //console.log("camera", camera)
 }
 
 function updateSize() {
@@ -670,3 +905,35 @@ function createControls() {
 
 
 
+// Update Loop
+function update() {
+    world.step(1 / 60);
+
+    letterMeshes.forEach(function (letter) {
+        const body = letter.userData.physicsBody;
+        if (body) {
+
+
+            // ADD some rotation
+            const rotation_quaternion = new CANNON.Quaternion();
+            //rotation_quaternion.setFromEuler(0.03, 0.03, 0.03 );
+
+            //body.quaternion.mult(rotation_quaternion, body.quaternion);
+            
+
+
+            if(LETTERS_LOADED)
+            {
+                letter.position.copy(body.position);
+                letter.quaternion.copy(body.quaternion);
+                //letter.quaternion = new THREE.Quaternion(body.quaternion.x + 1, body.quaternion.y, body.quaternion.z, body.quaternion.w)
+    
+            }
+
+            // const attractionVec = attractorPosition.vsub(body.position);
+            // attractionVec.normalize();
+            // attractionVec.scale(attractorStrength, attractionVec);
+            // body.applyForce(attractionVec, body.position);
+        }
+    });
+}
