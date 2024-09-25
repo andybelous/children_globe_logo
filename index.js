@@ -65,6 +65,9 @@ const globe_original_rotation = new THREE.Vector3(0, 1.5399999999999892, 0);
 
 var GLOBE_ANIMATED = true;
 var FOCUS_ON_SWITH_PLAYED = false;
+var current_globe_animation;
+
+var ALLOW_PHYSIX = false;
 
 const svgViewBox = [2000, 1000];
 const offsetY = -.1;
@@ -178,45 +181,25 @@ function updateMousePosition(eX, eY) {
 
 
 
-
+function getRandomArbitrary(min, max) {
+    return Math.random() * (max - min) + min;
+  }
 
 function animateGlobeUpDown(direction)
 {
 
 
-    if(!GLOBE_ANIMATED)
-    {
-        gsap.to(globeGroup.position, {
-            duration: 2,
-            x: globe_original_position.x,
-            y: globe_original_position.y,
-            z: globe_original_position.z,
-            onUpdate: () =>
-            {
-              //controls.update();
-            },
-            onComplete: () =>
-            {
-              //this.controls.enabled = true;
-              
-            }, 
-            ease: "power1.inOut"
-          });
-
-
-
-          return;
-    }
 
     const offset = direction == "up" ? 0.2: -0.2;
-    gsap.to(globeGroup.position, {
+    current_globe_animation = gsap.to(globeGroup.position, {
         duration: 2,
         x: globe_original_position.x,
-        y: offset,
+        y: globe_original_position.y + offset,
         z: globe_original_position.z,
         onUpdate: () =>
         {
           //controls.update();
+          globeGroup.userData.physicsBody.position = new CANNON.Vec3(globeGroup.position.x, globeGroup.position.y, globeGroup.position.z);
         },
         onComplete: () =>
         {
@@ -291,6 +274,9 @@ function loadLogoLetters ()
                 const W = gltf.scene.getObjectByName("W");
                 W.position.x -=1.1;
 
+                const L = gltf.scene.getObjectByName("L");
+                L.position.y += 0.1;
+
 
                 letter_model.children.forEach((letter)=>
                 {
@@ -330,10 +316,6 @@ function loadLogoLetters ()
                     // letter.rotation.x = 0;
                     // letter.rotation.y = 0;
                     // letter.rotation.z = 0;
-
-                    function getRandomArbitrary(min, max) {
-                        return Math.random() * (max - min) + min;
-                      }
                     
 
 
@@ -429,22 +411,17 @@ function resetModelPosition()
         letter.userData.physicsBody.position = new CANNON.Vec3(letter.userData.original_position.x, letter.userData.original_position.y, letter.userData.original_position.z) ;
         letter.userData.physicsBody.quaternion.copy(letter.userData.original_quaternion) ;
 
-        // orientation
-        //body.quaternion.set(0,0,0,1);
-        // body.initQuaternion.set(0,0,0,1);
-        // body.previousQuaternion.set(0,0,0,1);
-        // body.interpolatedQuaternion.set(0,0,0,1);
+        letter.position.set(letter.userData.original_position.x, letter.userData.original_position.y, letter.userData.original_position.z);
+        letter.quaternion.copy(letter.userData.original_quaternion);
 
-
-        // Force
-
-
-        
-        // letter.userData.physicsBody.force.setZero();
-        // letter.userData.physicsBody.torque.setZero();
     
-    })
-    
+    });
+
+    globeGroup.position.set(globe_original_position.x, globe_original_position.y, globe_original_position.z);
+    globeGroup.quaternion.copy(globeGroup.userData.original_quaternion);
+    globeGroup.userData.physicsBody.quaternion = new CANNON.Quaternion(globeGroup.quaternion.x, globeGroup.quaternion.y, globeGroup.quaternion.z, globeGroup.quaternion.w);
+    globeGroup.userData.physicsBody.position = new CANNON.Vec3(globeGroup.position.x, globeGroup.position.y, globeGroup.position.z);
+
 }
 function initScene() {
     renderer = new THREE.WebGLRenderer({canvas: canvasEl, alpha: true, antialias: true});
@@ -562,25 +539,6 @@ window.addEventListener("click", (e)=>
 
     
 
-    //Give letter impulse
-    letterMeshes.forEach(function (letter) {
-        const body = letter.userData.physicsBody;
-        if (body) {
-
-
-            //Add impulse onclick
-            const strength = 140;
-            const dt = 1 / 60;
-
-            const topPoint = new CANNON.Vec3(-0.18, 0.2, 0.1)
-            const impulse = new CANNON.Vec3(strength * dt, 0, 0)
-            body.applyImpulse(impulse, topPoint)
-
-            
-
-        }
-    });
-
 
 
 
@@ -640,6 +598,47 @@ function createGlobe() {
     console.log("globeGroup.rotation", globeGroup.rotation)
 
     //globeGroup.rotation.set(0.6632251157578458, 1.518436449235066, 0)
+
+    // letter.geometry.boundingBox.getCenter(center);
+    // letter.geometry.center();
+
+
+
+
+
+    // ADDING GLOBE PHYSIX BODY
+    const boundingBox = new THREE.Box3().setFromObject(globeGroup);
+    const size = new THREE.Vector3();
+    boundingBox.getSize(size);
+
+    const halfExtents = size.x/2;
+    console.log("halfExtents globe", halfExtents)
+
+    const globeShape = new CANNON.Sphere(halfExtents);
+
+    const globeBody = new CANNON.Body({
+        mass: 1.5,
+        linearDamping: 0.4,
+        angularDamping: 0.4,
+        position: globeGroup.position.clone(),
+        shape: globeShape,
+        material: letterMaterial,
+        allowSleep: true,
+        quaternion: globeGroup.quaternion
+        
+    });
+
+    // letterBody.quaternion = letter.quaternion.clone()
+
+
+    globeBody.maxAngularVelocity = 5;
+    world.addBody(globeBody);
+    globeGroup.userData.physicsBody = globeBody;
+
+    globeGroup.userData.original_position = new THREE.Vector3(globeGroup.position.x, globeGroup.position.y, globeGroup.position.z);
+    globeGroup.userData.original_quaternion = globeGroup.quaternion.clone();
+
+
 }
 
 function setMapTexture(material, URI) {
@@ -683,23 +682,39 @@ function prepareHiResTextures() {
 
 function focusOnSwitherLand ()
 {
-    //svgCountries[hoveredCountryIdx].getAttribute("data-name");
-
-
-    // SwitherLand Data index is 25
-
-    // svgCountries.forEach((country, index)=>
-    // {
-    //     if(country.getAttribute("data-name") == "Switzerland")
-    //     {
-    //         console.log("SwitherLand Data index: ", index);
-    //         setMapTexture(globeSelectionOuterMesh.material, dataUris[index]);
-    //         countryNameEl.innerHTML = svgCountries[index].getAttribute("data-name");
-    //     }
-    // })
 
     GLOBE_ANIMATED = false;
     FOCUS_ON_SWITH_PLAYED = true;
+
+
+    if(current_globe_animation)
+    {
+        current_globe_animation.pause();
+        current_globe_animation.kill();
+    }
+    
+    gsap.to(globeGroup.position, {
+        duration: 1,
+        x: globe_original_position.x,
+        y: globe_original_position.y,
+        z: globe_original_position.z,
+        onUpdate: () =>
+        {
+                  //controls.update();
+    
+                  //globeGroup.userData.physicsBody.quaternion = new CANNON.Quaternion(globeGroup.quaternion.x, globeGroup.quaternion.y, globeGroup.quaternion.z, globeGroup.quaternion.w);
+        globeGroup.userData.physicsBody.position = new CANNON.Vec3(globeGroup.position.x, globeGroup.position.y, globeGroup.position.z);
+        },
+        onComplete: () =>
+        {
+                  //this.controls.enabled = true;
+                  
+        }, 
+        ease: "power1.inOut"
+        });
+    
+    
+    
 
     
     setMapTexture(globeSelectionOuterMesh.material, dataUris[SWITHERLAND_DATA_INDEX]);
@@ -714,13 +729,15 @@ function focusOnSwitherLand ()
 
     console.log("Euler Rotation:", globeGroup.rotation);
     gsap.to(globeGroup.rotation, {
-        duration: 2,
+        duration: 1,
         x: 0.6632251157578458,
         y: 1.838436449235066,
         z: 0,
         onUpdate: () =>
         {
           //controls.update();
+
+          globeGroup.userData.physicsBody.quaternion = new CANNON.Quaternion(globeGroup.quaternion.x, globeGroup.quaternion.y, globeGroup.quaternion.z, globeGroup.quaternion.w);
         },
         onComplete: () =>
         {
@@ -729,36 +746,56 @@ function focusOnSwitherLand ()
 
           this.setTimeout(()=>{
 
-
-        
-            //reset Rotation
-            gsap.to(globeGroup.rotation, {
-                duration: 2,
-                x: globe_original_rotation.x,
-                y: globe_original_rotation.y,
-                z: globe_original_rotation.z,
-                onUpdate: () =>
-                {
-                //controls.update();
-                },
-                onComplete: () =>
-                {
-                //this.controls.enabled = true;
-
-                GLOBE_ANIMATED = true;
-                animateGlobeUpDown("up")
-                FOCUS_ON_SWITH_PLAYED = false;
-
-                resetModelPosition();
-
-                }, 
-                ease: "power1.inOut"
-            });
-
-
+            GLOBE_ANIMATED = false;
+            ALLOW_PHYSIX = true;
 
             
-          }, 3000
+
+
+            //Give letter impulse
+            letterMeshes.forEach(function (letter) {
+                const body = letter.userData.physicsBody;
+                if (body) {
+        
+
+        
+                    //Add impulse onclick
+                    const strength = getRandomArbitrary(-20, 20);
+                    const dt = 1 / 60;
+        
+                    //const topPoint = new CANNON.Vec3(-0.18, 0.2, 0.1)
+                    const topPoint = new CANNON.Vec3(0, 0.1, 0)
+                    const impulse = new CANNON.Vec3(-strength * dt, -strength * dt, -strength * dt)
+                    body.applyImpulse(impulse, topPoint);
+        
+                    
+        
+                }
+            });
+        
+            //Give the globe impulse 
+            
+            const strength = getRandomArbitrary(-60, 60)
+            const dt = 1 / 60;
+            const topPoint = new CANNON.Vec3(0, 0.6059554180637184, 0)
+            const impulse = new CANNON.Vec3(-strength * dt, -strength * dt, -strength * dt);
+            globeGroup.userData.physicsBody.applyImpulse(impulse, topPoint);
+            //globeGroup.userData.physicsBody.applyLocalImpulse(impulse, topPoint);
+            // const force = new CANNON.Vec3(-strength, 0, 0)
+            // globeGroup.userData.physicsBody.applyForce(force)
+
+        
+
+            this.setTimeout(()=>{
+                resetModelPosition();
+                GLOBE_ANIMATED = true;
+                ALLOW_PHYSIX = false;
+                FOCUS_ON_SWITH_PLAYED = false;
+                animateGlobeUpDown("up");
+            }, 7000)
+
+            
+          }, 1000
           )
           
         }, 
@@ -826,15 +863,18 @@ function render() {
 
 
     //console.log("globeGroup.rotation",globeGroup.rotation)
-    if(GLOBE_ANIMATED)
+    if(GLOBE_ANIMATED && globeGroup)
     {
         //console.log("globeGroup.rotation.y", globeGroup.rotation.y)
         //console.log("Math.PI", Math.PI)
+
         if(globeGroup.rotation.y >= Math.PI)
         {
             globeGroup.rotation.y = -Math.PI;
         }
         globeGroup.rotation.y +=0.005;
+        globeGroup.userData.physicsBody.quaternion = new CANNON.Quaternion(globeGroup.quaternion.x, globeGroup.quaternion.y, globeGroup.quaternion.z, globeGroup.quaternion.w) 
+        //globeGroup.quaternion.copy();
     }
     
     // if (isHoverable) {
@@ -907,33 +947,41 @@ function createControls() {
 
 // Update Loop
 function update() {
-    world.step(1 / 60);
-
-    letterMeshes.forEach(function (letter) {
-        const body = letter.userData.physicsBody;
-        if (body) {
-
-
-            // ADD some rotation
-            const rotation_quaternion = new CANNON.Quaternion();
-            //rotation_quaternion.setFromEuler(0.03, 0.03, 0.03 );
-
-            //body.quaternion.mult(rotation_quaternion, body.quaternion);
-            
-
-
-            if(LETTERS_LOADED)
-            {
-                letter.position.copy(body.position);
-                letter.quaternion.copy(body.quaternion);
-                //letter.quaternion = new THREE.Quaternion(body.quaternion.x + 1, body.quaternion.y, body.quaternion.z, body.quaternion.w)
     
-            }
 
-            // const attractionVec = attractorPosition.vsub(body.position);
-            // attractionVec.normalize();
-            // attractionVec.scale(attractorStrength, attractionVec);
-            // body.applyForce(attractionVec, body.position);
-        }
-    });
+    if(LETTERS_LOADED && ALLOW_PHYSIX)
+    {
+
+        world.step(1 / 60);
+
+        letterMeshes.forEach(function (letter) {
+            const body = letter.userData.physicsBody;
+            if (body) {
+
+
+                // ADD some rotation
+                const rotation_quaternion = new CANNON.Quaternion();
+                //rotation_quaternion.setFromEuler(0.03, 0.03, 0.03 );
+
+                //body.quaternion.mult(rotation_quaternion, body.quaternion);
+                
+
+
+
+                    letter.position.copy(body.position);
+                    letter.quaternion.copy(body.quaternion);
+                    //letter.quaternion = new THREE.Quaternion(body.quaternion.x + 1, body.quaternion.y, body.quaternion.z, body.quaternion.w)
+
+                // const attractionVec = attractorPosition.vsub(body.position);
+                // attractionVec.normalize();
+                // attractionVec.scale(attractorStrength, attractionVec);
+                // body.applyForce(attractionVec, body.position);
+            }
+        });
+
+
+        const globe_body = globeGroup.userData.physicsBody;
+        globeGroup.position.copy(globe_body.position);
+        globeGroup.quaternion.copy(globe_body.quaternion);
+    }
 }
